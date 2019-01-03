@@ -467,3 +467,7 @@ body.inverted blockquote {
 .download-epub-cover-selector-popup img.hidden  {
   display:none;
 }
+
+body.inverted .download-epub-cover-selector-popup {
+  background-color:#222 !important; /* very nearly black */
+}
