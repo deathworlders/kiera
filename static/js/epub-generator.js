@@ -182,6 +182,9 @@
 
 								// get the title and print it for debugging purposes
 								//console.log("DOWNLOADED:",parent.getElementsByTagName("article")[0].getElementsByTagName("h1")[0].innerHTML);
+								
+								// The #333333 color is very annoying on some Kindle models so this removes the color tag completely on body text.
+								css_file = css_file.replace("color: #333333", "");
 
 								// position:absolute; is not allowed in EPUB
 								// blockquote::before contains this tag
