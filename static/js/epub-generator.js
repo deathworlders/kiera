@@ -36,7 +36,7 @@
 		}
 		// Add separate files to the manifest
 		for(var i=0;i<separate_files.length;i++) {
-			opf.push("<item id=\"part_extra" + (i+1) + "\" href=\"" + separate_files[i] + "\" media-type=\"application/xhtml+xml\" />");
+			opf.push("<item id=\"part_extra" + (i+1) + "\" href=\"" + separate_files[i].filename + "\" media-type=\"" + separate_files[i].type + "\" />");
 		}
 
 		// Add the navigation file to the manifest
@@ -64,6 +64,7 @@
 
 		// Add separate files to the spine
 		for(var i=0;i<separate_files.length;i++) {
+			if (separate_files[i].type != "application/xhtml+xml") {continue;}
 			opf.push( "<itemref idref=\"part_extra" + (i+1) + "\" linear=\"no\" />" );
 		}
 
@@ -178,99 +179,150 @@
 								parent.innerHTML = htm;
 
 								// get the html
-								var text = parent.getElementsByTagName( "article" )[0].innerHTML;
+								var article = parent.getElementsByTagName( "article" )[0];
+								var requested_attachments = 0;
 
-								// get the title and print it for debugging purposes
-								//console.log("DOWNLOADED:",parent.getElementsByTagName("article")[0].getElementsByTagName("h1")[0].innerHTML);
-								
-								// The #333333 color is very annoying on some Kindle models so this removes the color tag completely on body text.
-								css_file = css_file.replace("color: #333333;", "");
+								function afterLoadingAttachments() {
+									var text = article.innerHTML;
 
-								// position:absolute; is not allowed in EPUB
-								// blockquote::before contains this tag
-								// so we'll just erase the whole thing
-								css_file = css_file.replace(/blockquote::before *?{[^}]*?}/g,"");
+									// get the title and print it for debugging purposes
+									//console.log("DOWNLOADED:",parent.getElementsByTagName("article")[0].getElementsByTagName("h1")[0].innerHTML);
+									
+									// The #333333 color is very annoying on some Kindle models so this removes the color tag completely on body text.
+									css_file = css_file.replace("color: #333333;", "");
 
-								// and also replace any leftovers
-								css_file = css_file.replace(/position:absolute;/g, "");
+									// position:absolute; is not allowed in EPUB
+									// blockquote::before contains this tag
+									// so we'll just erase the whole thing
+									css_file = css_file.replace(/blockquote::before *?{[^}]*?}/g,"");
 
-								// <br> tags usually don't have an end tag. xhtml requires end tags
-								// so we replace it with <br/>
-								text = text.replace(/<br>/g,"<br/>");
+									// and also replace any leftovers
+									css_file = css_file.replace(/position:absolute;/g, "");
 
-								// &nbsp; is not allowed in epub files
-								text = text.replace(/&nbsp;/g," ");
+									// <br> tags usually don't have an end tag. xhtml requires end tags
+									// so we replace it with <br/>
+									text = text.replace(/<br>/g,"<br/>");
 
-								var ending = "";
+									// &nbsp; is not allowed in epub files
+									text = text.replace(/&nbsp;/g," ");
 
-								// First find the end of the chapter
-								var pt = /(<hr>[ \n]*?<hr>)/g
-								var ending = pt.exec(text);
-								if (ending && ending.length > 0) {
-									var startPos = ending.index;
+									// <img> files must have a termination like <img />
+									text = text.replace(/<img(.*?)>/g, "<img$1 />" );
 
-									// Get everything from the chapter end point to the end of the document
-									ending = text.substring(startPos);
+									var ending = "";
 
-									// <hr> tags usually don't have an end tag. xhtml requires end tags
-									ending = ending.replace(/<hr>/g,"<hr />");
-									ending = ending.trim();
+									// Find the end of the chapter
+									var endingFound = -1;
+									var pt = /(<hr>[ \n]*?<hr>)/g
+									do {
+										var m = pt.exec(text);
+										if (m && m.length > 0) {
+											var startPos = m.index;
 
-									// Erase everything from text after the ending part
-									text = text.substring(0,startPos);
-								} else {
-									// Assume this chapter doesn't have an ending section
-									ending = "";
-								}
+											// also ensure that the words "end" and "chapter" follow immediately after the double <hr>
+											// so that double <hr> can be used elsewhere without breaking everything
+											var temp = text.substring(startPos,startPos + 64).toLowerCase();
+											if (temp.indexOf("end") != -1 && temp.indexOf("chapter") != -1) {
+												endingFound = startPos;
+												break;
+											}
+										}
+									} while (m);
 
-								var texts_before_adding = texts.length;
-								
-								// Now split the text on each <hr>
-								var t = text.split("<hr>");
-								for(i=0;i<t.length;i++) {
-									texts.push(t[i]);
-								}
+									if (endingFound != -1) {
+										// Get everything from the chapter end point to the end of the document
+										ending = text.substring(endingFound);
 
-								var custom_ending = "<hr /><hr /><p><strong>++END CHAPTER++</strong></p><hr /><hr />";
-								if (ending == "") {ending = custom_ending;}
+										// <hr> tags usually don't have an end tag. xhtml requires end tags
+										ending = ending.replace(/<hr>/g,"<hr />");
+										ending = ending.trim();
 
-								// check how many urls we're loading add chapter locations
-								if (epub_info.urls.length == 1) {
-									// only one url specified
-
-									// add ending to main body of text
-									texts.push(ending);
-
-									// add all to chapters
-									for(i=0;i<texts.length;i++) {
-										chapters.push(i); 
-									}
-								} else {
-									// many urls specified
-
-									// add ending as a separate file
-									// and include a link to it
-									// as long as this isn't the final chapter
-									if (ending != custom_ending && idx < epub_info.urls.length) {
-										separate_files.push(ending);
-										var str = custom_ending;
-										str += "<br /><a href='part_extra_"+prefixZeroes(separate_files.length)+".xhtml'>Click here to check out the amazing Patrons who supported this chapter.</a>";
-										texts.push(str);
+										// Erase everything from text after the ending part
+										text = text.substring(0,endingFound);
 									} else {
-										texts.push(ending);
+										// Assume this chapter doesn't have an ending section
+										ending = "";
 									}
 
-									// add only one chapter for each actual chapter
-									chapters.push(texts_before_adding);
+									var texts_before_adding = texts.length;
+									
+									// Now split the text on each <hr>
+									var t = text.split("<hr>");
+									for(i=0;i<t.length;i++) {
+										if (t[i].trim() == "") {continue;}
+										texts.push(t[i]);
+									}
+
+									var custom_ending = "<hr /><hr /><p><strong>++END CHAPTER++</strong></p><hr /><hr />";
+									if (ending == "") {ending = custom_ending;}
+
+									// check how many urls we're loading add chapter locations
+									if (epub_info.urls.length == 1) {
+										// only one url specified
+
+										// add ending to main body of text
+										texts.push(ending);
+
+										// add all to chapters
+										for(i=0;i<texts.length;i++) {
+											chapters.push(i); 
+										}
+									} else {
+										// many urls specified
+
+										// add ending as a separate file
+										// and include a link to it
+										// as long as this isn't the final chapter
+										if (ending != custom_ending && idx < epub_info.urls.length) {
+											separate_files.push(ending);
+											var str = custom_ending;
+											str += "<br /><a href='part_extra_"+prefixZeroes(separate_files.length)+".xhtml'>Click here to check out the amazing Patrons who supported this chapter.</a>";
+											texts.push(str);
+										} else {
+											texts.push(ending);
+										}
+
+										// add only one chapter for each actual chapter
+										chapters.push(texts_before_adding);
+									}
+
+									if (requested_attachments == 0) {
+										onRequestsFinished();
+									}
+								}
+
+								// Find all image tags to attach the images to the resulting epub
+								var imgs = article.getElementsByTagName("img");
+								if (imgs.length == 0) {
+									afterLoadingAttachments();
+								} else {
+									for(let y=0;y<imgs.length;y++) {
+										requested_attachments++;
+										let src = imgs[y].src;
+
+										httpGet(src,function(blob) {
+											separate_files.push(blob);
+
+											// update the src to their new name
+											imgs[y].src = "part_extra_" + prefixZeroes(separate_files.length) + "." + blob.type.split("/")[1];
+
+											requested_attachments--;
+											if (requested_attachments == 0) {
+												afterLoadingAttachments();
+											}
+										},function() {
+											requested_attachments--;
+											err = true;
+											if (requested_attachments == 0) {
+												afterLoadingAttachments();
+											}
+										},true);
+									}
 								}
 							})(x);
 						}
-
-						onRequestsFinished();
 					},1);
 				}
-
-				//console.log("chapters",chapters);
 
 				// Step 4 - Zip 'em up and download
 				function onRequestsFinished() {
@@ -300,10 +352,16 @@
 					// add separate files
 					for(var i=0;i<separate_files.length;i++) {
 						var text = separate_files[i];
-						var filename = "part_extra_"+prefixZeroes(i+1)+".xhtml";
-						var html = buildFile(text);
-						content.file(filename,html);
-						files_extra.push(filename);
+						if (typeof text == "string") {
+							var filename = "part_extra_"+prefixZeroes(i+1)+".xhtml";
+							var html = buildFile(text);
+							content.file(filename,html);
+							files_extra.push({filename:filename,type:"application/xhtml+xml"});
+						} else if (text instanceof Blob) {
+							var filename = "part_extra_"+prefixZeroes(i+1)+"."+text.type.split("/")[1];
+							content.file(filename,text);
+							files_extra.push({filename:filename,type:text.type});
+						}
 					}
 
 					// Handle cover image
