@@ -170,6 +170,8 @@
 					download_progress_label.innerHTML = "Creating EPUB...";
 
 					setTimeout(function() { // wait for 1 frame to give the label above time to update
+						var total_files_processing = epub_info.urls.length;
+
 						for(var x=0;x<epub_info.urls.length;x++) {
 							(function(idx) {
 								var url = epub_info.urls[idx];
@@ -178,9 +180,10 @@
 								var parent = document.createElement("div");
 								parent.innerHTML = htm;
 
+								var requested_attachments = 0;
+
 								// get the html
 								var article = parent.getElementsByTagName( "article" )[0];
-								var requested_attachments = 0;
 
 								function afterLoadingAttachments() {
 									var text = article.innerHTML;
@@ -286,7 +289,9 @@
 										chapters.push(texts_before_adding);
 									}
 
-									if (requested_attachments == 0) {
+									total_files_processing--;
+									if (total_files_processing == 0) {
+										// all attachments downloaded, continue
 										onRequestsFinished();
 									}
 								}
@@ -294,11 +299,17 @@
 								// Find all image tags to attach the images to the resulting epub
 								var imgs = article.getElementsByTagName("img");
 								if (imgs.length == 0) {
+									// no attachments found, proceed immediately
 									afterLoadingAttachments();
 								} else {
 									for(let y=0;y<imgs.length;y++) {
 										requested_attachments++;
-										let src = imgs[y].src;
+										total_files_processing++;
+										let src = imgs[y].getAttribute("src"); // do not use ".src" here
+										if (!src.startsWith( "http://" ) && !src.startsWith( "https://" )) {
+											// if the url is not an absolute url, prepend the current folder to handle relative paths properly
+											src = url + src;
+										}
 
 										httpGet(src,function(blob) {
 											separate_files.push(blob);
@@ -307,11 +318,13 @@
 											imgs[y].src = "part_extra_" + prefixZeroes(separate_files.length) + "." + blob.type.split("/")[1];
 
 											requested_attachments--;
+											total_files_processing--;
 											if (requested_attachments == 0) {
 												afterLoadingAttachments();
 											}
 										},function() {
 											requested_attachments--;
+											total_files_processing--;
 											err = true;
 											if (requested_attachments == 0) {
 												afterLoadingAttachments();
