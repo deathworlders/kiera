@@ -427,7 +427,11 @@
 					var css = content.folder( "css" );
 						css.file( "css.css", css_file );
 
-					zip.generateAsync({type:"blob", mimeType:"application/epub+zip"}).then(function(content) {
+					zip.generateAsync({
+						type:"blob",
+						mimeType:"application/epub+zip",
+						compression:"DEFLATE"
+					}).then(function(content) {
 						// delete all non-alphanumeric characters in the title to use it as the file name
 						var filename = epub_info.story_title.replace( /[^a-zA-Z0-9]/g, "" );
 						if (epub_info.title != epub_info.story_title) {filename += epub_info.title.replace( /[^a-zA-Z0-9]/g, "" );}
