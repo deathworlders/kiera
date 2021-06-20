@@ -25,33 +25,35 @@
 // httpGet - Helper function to get a file from the server
 // Basically used only to get the CSS file to style the epub contents properly
 // and to get other html files if the user wants to download multiple at once
-function httpGet(url, callback, callback_fail, is_binary) {
-	var xmlhttp = new XMLHttpRequest();
+async function httpGet(url, is_binary) {
+	return new Promise((s,e)=>{
+		var xmlhttp = new XMLHttpRequest();
 
-	if (typeof is_binary == "undefined") {is_binary = false;}
+		if (typeof is_binary == "undefined") {is_binary = false;}
 
-	if (is_binary == true) {
-		xmlhttp.responseType = "blob";
-	}
-
-	xmlhttp.onreadystatechange = function() {
-		if (xmlhttp.readyState == XMLHttpRequest.DONE) {
-			if (xmlhttp.status == 200) {
-				var response = (is_binary ? xmlhttp.response : xmlhttp.responseText);
-				callback(response, url);
-			} else {
-				if (callback_fail) {callback_fail();}
-			}
+		if (is_binary == true) {
+			xmlhttp.responseType = "blob";
 		}
-	};
 
-	xmlhttp.open("GET", url, true);
-	xmlhttp.send();
+		xmlhttp.onreadystatechange = function() {
+			if (xmlhttp.readyState == XMLHttpRequest.DONE) {
+				if (xmlhttp.status == 200) {
+					var response = (is_binary ? xmlhttp.response : xmlhttp.responseText);
+					s(response);
+				} else {
+					if (callback_fail) {e("Unable to get file: '"+url+"'");}
+				}
+			}
+		};
+
+		xmlhttp.open("GET", url, true);
+		xmlhttp.send();
+	});
 }
 
 // openFile - Helper function mainly used to get the contents
 // of a file that was selected using an <input type='file'>
-function openFile( file, callback ) {
+function openFile( file, callback, callback_fail ) {
 	var name = file.name;
 	var type = file.type;
 
@@ -71,11 +73,13 @@ function openFile( file, callback ) {
 		}
 		reader.readAsArrayBuffer( file );
 	}
+
+	if (callback_fail) {reader.addEventListener("error", callback_fail );}
 }
 
 // openImage - Helper function used to open images
 // that was selected using an <input type='file'>
-function openImage( file, callback ) {
+function openImage( file, callback, callback_fail ) {
 	var name = file.name;
 	var type = file.type;
 
@@ -86,5 +90,10 @@ function openImage( file, callback ) {
 		reader.readAsDataURL( file );
 	} else {
 		alert("Your browser doesn't support 'readAsDataURL'!");
+		if (callback_fail) {callback_fail();}
+		reader = null;
+		return;
 	}
+
+	if (callback_fail) {reader.addEventListener("error", callback_fail);}
 }
