@@ -41,7 +41,7 @@ async function httpGet(url, is_binary) {
 					var response = (is_binary ? xmlhttp.response : xmlhttp.responseText);
 					s(response);
 				} else {
-					if (callback_fail) {e("Unable to get file: '"+url+"'");}
+					e("Unable to get file: '"+url+"'");
 				}
 			}
 		};

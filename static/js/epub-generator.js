@@ -109,7 +109,7 @@
 
 	async function oneFrame() {return new Promise((s)=>{setTimeout(s,1);});}
 
-	async function handleAttachments( url, article, separate_files ) {
+	async function handleAttachments( url, article, separate_files, already_downloaded_attachments ) {
 		return new Promise(async (s,e) => {
 			let imgs = article.getElementsByTagName("img");
 			if (imgs.length == 0) {
@@ -119,7 +119,13 @@
 				try {
 					for(let y=0;y<imgs.length;y++) {
 						let src = imgs[y].getAttribute("src"); // do not use ".src" here
-						if (!src.startsWith( "http://" ) && !src.startsWith( "https://" )) {
+
+						if (typeof already_downloaded_attachments[src] != "undefined") {
+							imgs[y].src = already_downloaded_attachments[src];
+							return s();
+						}
+
+						if (!src.startsWith( "http://" ) && !src.startsWith( "https://" ) && !src.startsWith("/")) {
 							// if the url is not an absolute url, prepend the current folder to handle relative paths properly
 							src = url + src;
 						}
@@ -128,7 +134,9 @@
 						separate_files.push(blob);
 
 						// update the src to their new name
-						imgs[y].src = "part_extra_" + prefixZeroes(separate_files.length) + "." + blob.type.split("/")[1];
+						let newsrc = "part_extra_" + prefixZeroes(separate_files.length) + "." + blob.type.split("/")[1];
+						imgs[y].src = newsrc;
+						already_downloaded_attachments[src] = newsrc;
 					}
 
 					s();
@@ -228,6 +236,7 @@
 			var downloads = {};
 			var texts = [];
 			var separate_files = [];
+			var already_downloaded_attachments = {};
 			var chapters = [];
 
 			download_progress.classList.remove("hidden");
@@ -263,7 +272,7 @@
 				let article = parent.getElementsByTagName("article")[0];
 
 				// Handle all file attachments (img/etc) to attach to the resulting epub
-				await handleAttachments( url, article, separate_files );
+				await handleAttachments( url, article, separate_files, already_downloaded_attachments );
 
 				// get the title and print it for debugging purposes
 				//console.log("DOWNLOADED:",parent.getElementsByTagName("article")[0].getElementsByTagName("h1")[0].innerHTML);
